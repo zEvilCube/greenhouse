@@ -1,2 +1,2 @@
-# Greenhouse
-Репозиторий проекта (2 курс, 2 семестр)
+# Greenhouse API
+Ветка сервера (FastAPI)
