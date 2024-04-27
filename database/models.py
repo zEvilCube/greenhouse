@@ -20,13 +20,11 @@ class Sensor(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_id = Column(Integer, ForeignKey("greenhouse.id"), nullable=False)
-    name = Column(String, default=None)
     type = Column(String, nullable=False)
     reading = Column(Integer)
     reference = Column(Integer)
 
     greenhouse = relationship("Greenhouse", back_populates="sensors")
-    connections = relationship("SensorControllerConnection", back_populates="sensor")
 
 
 class Controller(Base):
@@ -34,21 +32,7 @@ class Controller(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_id = Column(Integer, ForeignKey("greenhouse.id"), nullable=False)
-    name = Column(String, default=None)
     type = Column(String, nullable=False)
     status = Column(Boolean)
 
     greenhouse = relationship("Greenhouse", back_populates="controllers")
-    connections = relationship("SensorControllerConnection", back_populates="controller")
-
-
-class SensorControllerConnection(Base):
-    __tablename__ = "sensor_controller_connection"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    sensor_id = Column(Integer, ForeignKey("sensor.id"), nullable=False)
-    controller_id = Column(Integer, ForeignKey("controller.id"), nullable=False)
-    type = Column(String, nullable=False)
-
-    sensor = relationship("Sensor", back_populates="connections")
-    controller = relationship("Controller", back_populates="connections")

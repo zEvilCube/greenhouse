@@ -13,12 +13,9 @@ app.include_router(controllers_router)
 
 @app.get("/")
 async def echo(request: Request):
-    return dict(request.query_params)
+    return request.query_params
 
 
-@app.get("/test")
+@app.post("/test")
 async def test():
-    from database import crud
-    created_greenhouse = crud.create_greenhouse()
-    read_greenhouse = crud.read_greenhouse(user_key=created_greenhouse.user_key)
-    return read_greenhouse
+    return {}
