@@ -1,6 +1,12 @@
-from utils import generate_api_key
+import random
+import string
+
 from . import get_session
 from .models import Controller, Greenhouse, Sensor
+
+
+def generate_api_key() -> str:
+    return "".join([random.choice(string.ascii_letters + string.digits) for _ in range(16)])
 
 
 # Utils
