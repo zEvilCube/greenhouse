@@ -5,9 +5,12 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import config
+from database import models, engine
 
 
 async def main():
+    models.Base.metadata.create_all(bind=engine)
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 
     bot = Bot(config.bot_token.get_secret_value())
