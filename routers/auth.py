@@ -3,8 +3,8 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from routers.menu import command_menu
-from server import verify_auth
+from database.crud import update_auth
+from server import get_greenhouse
 from states import AuthStates
 from templates import *
 
@@ -20,6 +20,8 @@ async def command_auth(message: Message, state: FSMContext):
 
 @router.message(AuthStates.PENDING_AUTH)
 async def pending_auth(message: Message, state: FSMContext):
-    if verify_auth(message.text):
-        return await command_menu(message, state)
-    await message.answer(MESSAGE_AUTH_INVALID)
+    from routers.menu import command_menu
+    if get_greenhouse(message.text) is None:
+        return await message.answer(MESSAGE_AUTH_INVALID)
+    update_auth(message.from_user.id, message.text)
+    return await command_menu(message, state)
