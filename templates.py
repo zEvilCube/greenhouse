@@ -32,6 +32,7 @@ EMOJIS_SENSORS = {
 }
 
 EMOJIS_STATUSES = {
-    False or None: "⚪",
+    False: "⚪",
     True: "🟢",
+    None: "⚪"
 }

@@ -20,8 +20,8 @@ async def command_auth(message: Message, state: FSMContext):
 
 @router.message(AuthStates.PENDING_AUTH)
 async def pending_auth(message: Message, state: FSMContext):
-    from routers.menu import command_menu
+    from routers.menu import button_refresh
     if get_greenhouse(message.text) is None:
         return await message.answer(MESSAGE_AUTH_INVALID)
     update_auth(message.from_user.id, message.text)
-    return await command_menu(message, state)
+    return await button_refresh(message, state)
