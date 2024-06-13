@@ -1,10 +1,7 @@
 #include <LiquidCrystal.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <GPRSk_Shield_Arduino.h>
 #include <SoftwareSerial.h>
-
-#define PHONE_NUMBER  "yourphone"
 #define IRRIGATION_TIME 10
 #define MAX_BRIGHTNESS_LUX 1000
 #define BRIGHTNESS_SETPOINT 700
@@ -18,6 +15,8 @@
 #define MIN_TEMPERATURE_SETPOINT 15
 #define MAX_MOISTURE_SETPOINT 99
 #define MIN_MOISTURE_SETPOINT 9
+//Размер буфера gsm
+#define GSM_BUFFER 64
 // сигнальный провод датчика
 #define ONE_WIRE_BUS 10
 // создаём объект для работы с библиотекой OneWire
@@ -28,7 +27,9 @@ DallasTemperature sensor(&oneWire);
 float ticksPerSecond = 49910; //1 секунда
 LiquidCrystal lcd(9,8,7,6,5,4);
 
-SoftwareSerial gsmIn(6, 7);
+SoftwareSerial GSM(2, 3);
+unsigned char gsmBuffer[GSM_BUFFER];
+int gsmCount=0; 
 
 String msgFromEsp="";
 String msgToEsp="";
@@ -48,9 +49,12 @@ bool tempFlag = false;
 bool tempTestFlag = false;
 bool loadingFlag = true;
 bool doParsing = false;
+bool doGsmParsing = false;
 bool sendInfoFlag = false;
 bool skipSendFlag = true;
 bool irgCheckFlag = false;
+bool atFlag = false;
+bool smsFlag = false;
 //bool testFlag = false; //временный удалить
 int minute = 0;
 int hour = 0;
@@ -81,7 +85,120 @@ int temperatureSetpoint = TEMPERATURE_SETPOINT;
 int brightnessSetpoint = BRIGHTNESS_SETPOINT;
 int moistureSetpoint = MOISTURE_SETPOINT;
 
-Serial1 GPRSk gprs(gsmIn);
+//GSM Уставка
+int temperatureGsmSetpoint = TEMPERATURE_SETPOINT;
+int brightnessGsmSetpoint = BRIGHTNESS_SETPOINT;
+int moistureGsmSetpoint = MOISTURE_SETPOINT;
+String lastGsmPhoneNumber = "phone_number";
+String convert(char[],int);
+
+String convert(char* buffer,int lenght){
+  String result;
+  String stringToParse;
+  int counter;
+  for(int i=0;i<lenght;i++){
+      switch (buffer[i]){
+        case 'O':
+          if(i+1<lenght){
+            if(buffer[i+1]=='K'){
+              result.concat("1");//флаг что связь с модемом есть и мы можем принимать и отправлять сообщения, до этого  мы ничего не парсим и не отправляем
+              atFlag = true;
+            }
+          }
+          break;
+        case 'i':
+        case 'I':
+          if(i+1<lenght){
+              if((buffer[i+1]=='N') || (buffer[i+1]=='n')){
+                result.concat("2");//флаг отправки смс
+                smsFlag = true;
+              }
+            }
+          break;
+        case 'b':
+        case 'B':
+          if(i+1<lenght){
+            if(buffer[i+1]==':' ){
+              counter =i+2;
+              while(counter != lenght ){
+                if(buffer[counter]!=';'){
+                  stringToParse.concat(buffer[counter]);
+                }
+                counter++;
+              }
+              brightnessGsmSetpoint = stringToParse.toInt();
+              result.concat("B:");
+              result.concat("stringToParse");
+              result.concat("l");
+              //парсим овещенность и concat-им отпрарсенную строку в  виде B:800l
+              counter=0;
+              stringToParse = "";  
+            }
+          }
+          break;
+        case 'm':
+        case 'M':
+          if(i+1<lenght){
+            if(buffer[i+1]==':' ){
+              
+              counter =i+2;
+              while(counter != lenght ){
+                if(buffer[counter]!=';'){
+                  stringToParse.concat(buffer[counter]);
+                }
+                counter++;
+              }
+              moistureGsmSetpoint = stringToParse.toInt();
+              result.concat("M:");//парсим влажность и concat-им отпрарсенную строку в  виде M:80% 
+              result.concat("stringToParse");
+              result.concat("%");
+              counter=0;
+              stringToParse = ""; 
+            }
+          }
+          break;
+        case 't':
+        case 'T':
+          if(i!=0){
+            if(buffer[i-1]!='M'){
+              if(i+1<lenght){
+                if(buffer[i+1]==':' ){
+                  result.concat("T");
+                  counter =i+2;
+                  while(counter != lenght ){
+                    if(buffer[counter]!=';'){
+                      stringToParse.concat(buffer[counter]);
+                    }
+                    counter++;
+                  }
+                  temperatureGsmSetpoint = stringToParse.toInt();
+                  result.concat("T:");//парсим температуру и concat-им отпрарсенную строку в  виде T:25C
+                  result.concat("stringToParse");
+                  result.concat("C");
+                  counter=0;
+                  stringToParse = ""; 
+                }
+              }
+            }
+          }
+          break;
+        case '+':
+          if(i+1<lenght){
+            if(buffer[i+1]=='7' ){
+              result.concat("+7");
+              lastGsmPhoneNumber.concat("+7");
+              for(int j =i+2;j<i+12;j++){
+                lastGsmPhoneNumber.concat(buffer[j]);
+              }
+              //парсим номер телефона и запихиваем в отдельную строку
+            }
+          }
+          break;
+      }
+      //result.concat(buffer[i]);
+  }
+  return result;
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -112,6 +229,8 @@ void setup() {
   interrupts();                         // разрешаем все прерывания
   //Установливаем связь Wi-Fi
   Serial.begin(9600);
+  //Связь с GPRS модемом
+  GSM.begin(9600);
 }
 
 ISR(TIMER1_OVF_vect)                    // процедура обработки прерывания переполнения счетчика
@@ -273,6 +392,11 @@ void loop() {
 
   if(lightFlag)
   {
+    if(second==23){
+      GSM.print("AT\r");
+    }
+    
+
     if(lightTestFlag)
     {
       lightTestFlag = false;
@@ -367,7 +491,13 @@ void loop() {
     lcd.print(testMsgToEsp);
     testFlag = false;
   }*/
+  if(doGsmParsing && atFlag){
+    lcd.setCursor(0,0);
+    lcd.print(convert(gsmBuffer,gsmCount));
+    doGsmParsing = false;
+  }
   delay(1000);
+  //Работа с wi-fi модулем esp
   while (Serial.available()) {
       msgFromEsp = Serial.readString();
       doParsing = true;
@@ -401,18 +531,15 @@ void loop() {
     testMsgToEsp.concat((int)moistureProbe);
     testFlag = true;*/
     sendInfoFlag=false;
-
-    gprs.powerOn();
-    while (!gprs.init()) {
-    delay(1000);
-    lcd.print("GPRS Init error\r\n");
+  }
+  //Работа с GSM модулем
+  if (GSM.available()){         // if date is comming from softwareserial port ==> data is comming from gprs shield
+    gsmCount = 0;
+    while(GSM.available()){          // reading data into char array 
+      gsmBuffer[gsmCount++]=GSM.read();     // writing data into array
+      if(gsmCount == GSM_BUFFER)break;
     }
-    lcd.println("GPRS init success");
-
-    if (gprs.sendSMS(PHONE_NUMBER, msgToEsp))
-      Serial.println("Success");
-    else
-      Serial.println("Error");
+    doGsmParsing = true;
   }
   lcd.clear();
 }
